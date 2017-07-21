@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	brokerList        = flag.String("brokers", os.Getenv("KAFKA_PEERS"), "The comma separated list of brokers in the Kafka cluster")
+	brokerList        = flag.String("brokers", "kafka.service.consul:9092", "The comma separated list of brokers in the Kafka cluster")
 	topic             = flag.String("topic", "", "REQUIRED: the topic to consume")
 	partitions        = flag.String("partitions", "all", "The partitions to consume, can be 'all' or comma-separated numbers")
 	offset            = flag.String("offset", "newest", "The offset to start with. Can be `oldest`, `newest`")
@@ -29,10 +29,6 @@ var (
 
 func main() {
 	flag.Parse()
-
-	if *brokerList == "" {
-		printUsageErrorAndExit("You have to provide -brokers as a comma-separated list, or set the KAFKA_PEERS environment variable.")
-	}
 
 	if *topic == "" {
 		printUsageErrorAndExit("-topic is required")
