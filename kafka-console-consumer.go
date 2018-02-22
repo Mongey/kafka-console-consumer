@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/binary"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -10,9 +12,11 @@ import (
 	"strings"
 	"sync"
 
+	template "text/template"
+
+	schemaRegistry "github.com/Landoop/schema-registry"
 	"github.com/Shopify/sarama"
-	avro "github.com/elodina/go-avro"
-	kavro "github.com/elodina/go-kafka-avro"
+	"github.com/linkedin/goavro"
 )
 
 var (
@@ -23,9 +27,19 @@ var (
 	verbose           = flag.Bool("verbose", false, "Whether to turn on sarama logging")
 	bufferSize        = flag.Int("buffer-size", 256, "The buffer size of the message channel.")
 	schemaRegistryURI = flag.String("schema-registry", "http://schema-registry.service.consul", "The URI of the schema registry")
+	temp              = flag.String("template", "{{ .Offset}} [{{.Partition}}]:{{ .Key}}, {{ .Value }}", "go template")
 
 	logger = log.New(os.Stderr, "", log.LstdFlags)
 )
+
+type Message struct {
+	Key       string
+	Value     string
+	Offset    int64
+	Partition int32
+}
+
+var schemaCache = map[int]string{}
 
 func main() {
 	flag.Parse()
@@ -58,6 +72,12 @@ func main() {
 		printErrorAndExit(69, "Failed to get the list of partitions: %s", err)
 	}
 
+	newlineTemplate := *temp + "\n"
+	t, err := template.New("t1").Parse(newlineTemplate)
+	if err != nil {
+		panic("Template is invalid")
+
+	}
 	var (
 		messages = make(chan *sarama.ConsumerMessage, *bufferSize)
 		closing  = make(chan struct{})
@@ -92,14 +112,27 @@ func main() {
 		}(pc)
 	}
 
-	decoder := kavro.NewKafkaAvroDecoder(*schemaRegistryURI)
+	var m Message
+	sr, _ := schemaRegistry.NewClient(*schemaRegistryURI)
 	go func() {
 		for msg := range messages {
-			//fmt.Printf("Partition:\t%d\n", msg.Partition)
-			//fmt.Printf("Offset:\t%d\n", msg.Offset)
-			//fmt.Printf("Key:\t%s\n", string(msg.Key))
-			fmt.Printf("%s\n", valueToString(msg.Value, decoder))
-			//fmt.Println()
+			k, err := valueToString(msg.Key, sr)
+			if err != nil {
+				fmt.Println("key de err:", err)
+				continue
+			}
+			v, err := valueToString(msg.Value, sr)
+			if err != nil {
+				fmt.Println("v de err:", err)
+				continue
+			}
+			m = Message{
+				Key:       k,
+				Value:     v,
+				Partition: msg.Partition,
+				Offset:    msg.Offset,
+			}
+			t.Execute(os.Stdout, m)
 		}
 	}()
 
@@ -144,15 +177,37 @@ func printUsageErrorAndExit(format string, values ...interface{}) {
 	os.Exit(64)
 }
 
-func valueToString(in []byte, decoder *kavro.KafkaAvroDecoder) string {
+func valueToString(in []byte, sr schemaRegistry.Client) (string, error) {
 	if in[0] == 0 {
-		var record *avro.GenericRecord
-		foo, err := decoder.Decode(in)
-		record = foo.(*avro.GenericRecord)
+		schemaIDb := in[1:5]
+		data := in[5:]
+		i := int(binary.BigEndian.Uint32(schemaIDb))
+		schema, _ := getSchema(sr, i)
+		codec, err := goavro.NewCodec(schema)
 		if err != nil {
-			return string(in)
+			fmt.Println(err)
 		}
-		return record.String()
+		native, _, err := codec.NativeFromBinary(data)
+		if err != nil {
+			fmt.Println(err)
+		}
+		b, err := json.Marshal(native)
+		if err != nil {
+			return "", err
+		}
+		return string(b), nil
 	}
-	return string(in)
+	return string(in), nil
+}
+
+func getSchema(sr schemaRegistry.Client, id int) (string, error) {
+	if val, ok := schemaCache[id]; ok {
+		return val, nil
+	}
+	schema, err := sr.GetSchemaById(id)
+	if err != nil {
+		return "", nil
+	}
+	schemaCache[id] = schema
+	return schema, nil
 }
