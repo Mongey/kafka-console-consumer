@@ -178,7 +178,7 @@ func printUsageErrorAndExit(format string, values ...interface{}) {
 }
 
 func valueToString(in []byte, sr schemaRegistry.Client) (string, error) {
-	if in[0] == 0 {
+	if len(in) > 0 && in[0] == 0 {
 		schemaIDb := in[1:5]
 		data := in[5:]
 		i := int(binary.BigEndian.Uint32(schemaIDb))
