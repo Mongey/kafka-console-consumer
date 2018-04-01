@@ -182,10 +182,13 @@ func valueToString(in []byte, sr schemaRegistry.Client) (string, error) {
 		schemaIDb := in[1:5]
 		data := in[5:]
 		i := int(binary.BigEndian.Uint32(schemaIDb))
-		schema, _ := getSchema(sr, i)
+		schema, err := getSchema(sr, i)
+		if err != nil {
+			return "", nil
+		}
 		codec, err := goavro.NewCodec(schema)
 		if err != nil {
-			fmt.Println(err)
+			return "", nil
 		}
 		native, _, err := codec.NativeFromBinary(data)
 		if err != nil {
