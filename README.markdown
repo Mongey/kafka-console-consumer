@@ -26,10 +26,21 @@ Available command line options:
   -schema-registry string
         The URI of the schema registry (default "http://schema-registry.service.consul")
   -template string
-        go template (default "{{ .Offset}} [{{.Partition}}]:{{ .Key}}, {{ .Value }}")
+        go template (default "{{ .Offset }} [{{ .Partition }}]:{{ .Key }}, {{ .Value }}")
   -topic string
         REQUIRED: the topic to consume
   -verbose
         Whether to turn on sarama logging
 
 ```
+
+# Template
+
+You can pass in a go template, used to render the output using the `-template`
+flag. The following variables are available:
+
+* `Key`
+* `Value`
+* `Offset`
+* `Partition`
+* `SchemaID`

@@ -37,6 +37,12 @@ type Message struct {
 	Value     string
 	Offset    int64
 	Partition int32
+	SchemaID  int
+}
+
+type schemaAndMessage struct {
+	Message  string
+	SchemaID int
 }
 
 var schemaCache = map[int]string{}
@@ -116,19 +122,20 @@ func main() {
 	sr, _ := schemaRegistry.NewClient(*schemaRegistryURI)
 	go func() {
 		for msg := range messages {
-			k, err := valueToString(msg.Key, sr)
+			k, err := decodeAvro(msg.Key, sr)
 			if err != nil {
 				fmt.Println("key de err:", err)
 				continue
 			}
-			v, err := valueToString(msg.Value, sr)
+			v, err := decodeAvro(msg.Value, sr)
 			if err != nil {
 				fmt.Println("v de err:", err)
 				continue
 			}
 			m = Message{
-				Key:       k,
-				Value:     v,
+				SchemaID:  v.SchemaID,
+				Key:       k.Message,
+				Value:     v.Message,
 				Partition: msg.Partition,
 				Offset:    msg.Offset,
 			}
@@ -177,18 +184,18 @@ func printUsageErrorAndExit(format string, values ...interface{}) {
 	os.Exit(64)
 }
 
-func valueToString(in []byte, sr schemaRegistry.Client) (string, error) {
+func decodeAvro(in []byte, sr schemaRegistry.Client) (*schemaAndMessage, error) {
 	if len(in) > 0 && in[0] == 0 {
 		schemaIDb := in[1:5]
 		data := in[5:]
 		i := int(binary.BigEndian.Uint32(schemaIDb))
 		schema, err := getSchema(sr, i)
 		if err != nil {
-			return "", nil
+			return nil, nil
 		}
 		codec, err := goavro.NewCodec(schema)
 		if err != nil {
-			return "", nil
+			return nil, nil
 		}
 		native, _, err := codec.NativeFromBinary(data)
 		if err != nil {
@@ -196,11 +203,17 @@ func valueToString(in []byte, sr schemaRegistry.Client) (string, error) {
 		}
 		b, err := json.Marshal(native)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		return string(b), nil
+		return &schemaAndMessage{
+			Message:  string(b),
+			SchemaID: i,
+		}, nil
 	}
-	return string(in), nil
+	return &schemaAndMessage{
+		Message:  string(in),
+		SchemaID: -1,
+	}, nil
 }
 
 func getSchema(sr schemaRegistry.Client, id int) (string, error) {
