@@ -1,0 +1,16 @@
+[[constraint]]
+  name = "github.com/Landoop/schema-registry"
+  version = "0.1.0"
+
+[[constraint]]
+  name = "github.com/Shopify/sarama"
+  version = "1.16.0"
+
+[[constraint]]
+  name = "github.com/linkedin/goavro"
+  version = "2.1.1"
+
+[prune]
+  non-go = true
+  go-tests = true
+  unused-packages = true
