@@ -121,14 +121,18 @@ func main() {
 	sr, _ := schemaRegistry.NewClient(*schemaRegistryURI)
 	go func() {
 		for msg := range messages {
-			k, err := decodeAvro(msg.Key, sr)
+			k, err := decodeAvro(msg.Key, *sr)
 			if err != nil {
 				fmt.Println("key de err:", err)
 				continue
 			}
-			v, err := decodeAvro(msg.Value, sr)
+			v, err := decodeAvro(msg.Value, *sr)
 			if err != nil {
 				fmt.Println("v de err:", err)
+				continue
+			}
+			if v == nil {
+				fmt.Println("Could not decode avro message; have you configured the schema registry correctly? set the -schema-registry flag")
 				continue
 			}
 			m = Message{
