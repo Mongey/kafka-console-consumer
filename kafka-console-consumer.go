@@ -14,8 +14,8 @@ import (
 
 	template "text/template"
 
+	"github.com/IBM/sarama"
 	schemaRegistry "github.com/Landoop/schema-registry"
-	"github.com/Shopify/sarama"
 	"github.com/linkedin/goavro"
 )
 
@@ -82,7 +82,6 @@ func main() {
 	t, err := template.New("t1").Parse(newlineTemplate)
 	if err != nil {
 		panic("Template is invalid")
-
 	}
 	var (
 		messages = make(chan *sarama.ConsumerMessage, *bufferSize)
